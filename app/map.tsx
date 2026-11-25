@@ -31,7 +31,7 @@ import { useSearchRestaurantsMutation } from "@/app/lib/places/hooks";
 import type { Card } from "@/app/lib/places/hooks";
 import type { ICarouselInstance } from "react-native-reanimated-carousel";
 
-import { BENCH, BENCH_CARDS, BENCH_REGION, BENCH_RESULTS } from "@/bench";
+import { BENCH, BENCH_CARDS, BENCH_REGION, BENCH_RESULTS, focusRegion } from "@/bench";
 
 const SEARCH_BAR_HEIGHT = 72;
 const BOTTOM_INPUT_BLOCK = SEARCH_BAR_HEIGHT + 112 + 12;
@@ -193,14 +193,10 @@ const Map = () => {
   // Where Cheetah and the UIKit twin move the map.
   const focusPlace = (card: Card) => {
     mapRef.current?.animateToRegion(
-      { latitude: card.lat, longitude: card.lng, latitudeDelta: 0.004, longitudeDelta: 0.004 },
+      focusRegion(card),
       500
     );
   };
-
-  useEffect(() => {
-    if (BENCH_RESULTS) setTimeout(() => focusPlace(BENCH_CARDS[0]), 300);
-  }, []);
 
   const handleRestaurantChange = (restaurant: any, index: number) => {
     console.log("Selected:", restaurant.name, "at index", index);

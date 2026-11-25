@@ -1,9 +1,7 @@
 // app/components/Map/PlaceCard.tsx
 import React, { useMemo } from "react";
 import { BlurView } from "expo-blur";
-import { View, Text, Dimensions, TouchableOpacity, Image } from "react-native";
-// The carousel's own gestures swallow React Native's presses.
-import { Pressable } from "react-native-gesture-handler";
+import { View, Text, Dimensions, Pressable, TouchableOpacity, Image } from "react-native";
 import Animated, {
     SharedValue,
     useSharedValue,

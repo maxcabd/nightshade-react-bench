@@ -8,7 +8,7 @@ import * as Haptics from "expo-haptics";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import type { Card } from "@/app/lib/places/hooks";
 import NativeCarousel from "./NativeCarousel";
-import { BENCH_REGION, useBenchCards } from "./index";
+import { BENCH_REGION, focusRegion, useBenchCards } from "./index";
 
 export default function NativeMap() {
   const router = useRouter();
@@ -22,13 +22,13 @@ export default function NativeMap() {
   const focus = (card: Card) => {
     Haptics.selectionAsync();
     map.current?.animateToRegion(
-      { latitude: card.lat, longitude: card.lng, latitudeDelta: 0.004, longitudeDelta: 0.004 },
+      focusRegion(card),
       500
     );
   };
 
   useEffect(() => {
-    if (cards.length > 0) setTimeout(() => focus(cards[0]), 300);
+    if (cards.length === 1) setTimeout(() => focus(cards[0]), 300);
   }, [cards]);
 
   return (

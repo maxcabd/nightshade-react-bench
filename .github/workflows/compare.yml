@@ -150,13 +150,30 @@ jobs:
           TEST_RUNNER_REACT_TWIN: "1"
           ONLY: ${{ inputs.only }}
         run: |
+          # Out of the way of what a simulator does after its first boot.
+          sleep 180
+          log=/tmp/perf-${{ matrix.run }}.log
           status=0
-          xcodebuild test-without-building -xctestrun products/perf/*.xctestrun \
-            -destination "platform=iOS Simulator,id=$DEVICE" \
-            -only-testing:"CheetahUITests/CheetahPerformanceTests${ONLY:+/$ONLY}" \
-            -retry-tests-on-failure -test-iterations 2 \
-            -test-timeouts-enabled YES -maximum-test-execution-time-allowance 300 \
-            > /tmp/perf-${{ matrix.run }}.log 2>&1 || status=$?
+          measure() {
+            xcodebuild test-without-building -xctestrun products/perf/*.xctestrun \
+              -destination "platform=iOS Simulator,id=$DEVICE" \
+              -only-testing:"CheetahUITests/CheetahPerformanceTests/$1" \
+              -retry-tests-on-failure -test-iterations 2 \
+              -test-timeouts-enabled YES -maximum-test-execution-time-allowance 300 \
+              >> "$log" 2>&1 || status=1
+          }
+          # Each test of all three in a row, and each run starts with another,
+          # so none is always first.
+          apps=(Cheetah Native React)
+          if [ -n "$ONLY" ]; then
+            measure "$ONLY"
+          else
+            for test in Startup Results Page Scroll Idle; do
+              for n in 0 1 2; do
+                measure "test${apps[$(( (n + ${{ matrix.run }}) % 3 ))]}$test"
+              done
+            done
+          fi
           grep -E "Test Case.*(passed|failed|skipped)|swift:[0-9]+: error|CheetahPerf issue" /tmp/perf-*.log || tail -20 /tmp/perf-*.log
           python3 cheetah/tools/profile/ios_compare.py /tmp/perf-*.log | tee -a "$GITHUB_STEP_SUMMARY"
           exit $status

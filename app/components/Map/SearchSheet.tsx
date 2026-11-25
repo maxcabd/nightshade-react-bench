@@ -26,6 +26,7 @@ import FontAwesome from "@expo/vector-icons/FontAwesome5";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import SquircleView from "react-native-fast-squircle";
+import { BENCH_RESULTS } from "@/bench";
 
 interface SearchBottomSheetProps {
     onSearch?: (query: string) => void;
@@ -256,7 +257,7 @@ const SearchBottomSheet = forwardRef<BottomSheet, SearchBottomSheetProps>(
             <BottomSheet
                 accessible={false}
                 ref={ref}
-                index={1}
+                index={BENCH_RESULTS ? 0 : 1}
                 snapPoints={snapPoints}
                 animatedIndex={animatedIndex}
                 animationConfigs={animationConfigs}

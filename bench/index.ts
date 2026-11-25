@@ -44,12 +44,18 @@ export const BENCH_CARDS: Card[] = [
   place("burger", "Burger Joint", "Mission Street", 37.7599, -122.4148, 520, 1),
 ];
 
-export const BENCH_REGION = {
-  latitude: 37.7749,
-  longitude: -122.4194,
-  latitudeDelta: 0.025,
-  longitudeDelta: 0.025,
-};
+/** Where Cheetah's map starts: on all the places, or before a search. */
+export const BENCH_REGION = BENCH_RESULTS
+  ? { latitude: 37.73145, longitude: -122.4478, latitudeDelta: 0.17986, longitudeDelta: 0.10466 }
+  : { latitude: 37.7749, longitude: -122.4194, latitudeDelta: 0.025, longitudeDelta: 0.025 };
+
+/** Where Cheetah's map goes for one place: its pin above the card. */
+export const focusRegion = (card: Card) => ({
+  latitude: card.lat - 0.00119,
+  longitude: card.lng,
+  latitudeDelta: 0.00524,
+  longitudeDelta: 0.00305,
+});
 
 // Results shared between the native variant's map and its sheet, which is a
 // screen of its own.
