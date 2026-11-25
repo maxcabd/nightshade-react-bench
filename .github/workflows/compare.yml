@@ -1,0 +1,122 @@
+name: Compare
+
+# The React Native app against Cheetah and UIKit, on one simulator. The other
+# two and the tests come from github.com/maxcabd/cheetah, and so do the fonts
+# and the photo.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compare
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    runs-on: macos-26
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: react
+
+      - uses: actions/checkout@v4
+        with:
+          repository: maxcabd/cheetah
+          path: cheetah
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: react/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios
+
+      - name: Boot a simulator
+        run: |
+          DEVICE=$(xcrun simctl list devices available | awk '/-- iOS 26/ {f=1; next} /^-- / {f=0} f && /iPhone/ {print; exit}' | grep -oE '[0-9A-F-]{36}')
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
+          xcrun simctl boot "$DEVICE" || true
+          xcrun simctl bootstatus "$DEVICE" -b
+
+      - name: Build the React Native app (Release, Hermes, New Architecture)
+        working-directory: react
+        env:
+          EXPO_PUBLIC_BENCH: "1"
+        run: |
+          set -o pipefail
+          mkdir -p assets/fonts assets/images
+          cp ../cheetah/ios/Cheetah/Assets/*.otf assets/fonts/
+          cp ../cheetah/ios/Cheetah/Assets/second-cup-card-full.jpeg assets/images/
+          npm ci --legacy-peer-deps
+          npx expo prebuild --platform ios --no-install
+          (cd ios && pod install)
+          xcodebuild -workspace ios/*.xcworkspace -scheme nightshadex \
+            -configuration Release -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$DEVICE" \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build \
+            > /tmp/rn.log 2>&1 || { grep -E "error:" /tmp/rn.log | head -30; tail -30 /tmp/rn.log; exit 1; }
+          xcrun simctl install "$DEVICE" build/Build/Products/Release-iphonesimulator/*.app
+
+      - name: Build Cheetah and the UIKit twin
+        working-directory: cheetah
+        run: |
+          set -o pipefail
+          brew install xcodegen
+          (cd ios/NativeTwin && xcodegen generate)
+          xcodebuild -project ios/NativeTwin/NativeTwin.xcodeproj -scheme NativeTwin \
+            -sdk iphonesimulator -configuration Release \
+            -destination "platform=iOS Simulator,id=$DEVICE" \
+            -derivedDataPath build/twin CODE_SIGNING_ALLOWED=NO build > /tmp/twin.log 2>&1 \
+            || { grep -E "error:" /tmp/twin.log | head; exit 1; }
+          xcrun simctl install "$DEVICE" build/twin/Build/Products/Release-iphonesimulator/NativeTwin.app
+          chmod +x ios/build-rust.sh
+          CHEETAH_RUST_FEATURES="" ./ios/build-rust.sh > /tmp/rust.log 2>&1 || { tail -30 /tmp/rust.log; exit 1; }
+          (cd ios && xcodegen generate)
+          xcodebuild build-for-testing -project ios/Cheetah.xcodeproj -scheme Cheetah \
+            -sdk iphonesimulator -configuration Release \
+            -destination "platform=iOS Simulator,id=$DEVICE" \
+            -derivedDataPath build/perf CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > /tmp/cheetah.log 2>&1 || { grep -E "error:" /tmp/cheetah.log | head; exit 1; }
+          xcrun simctl install "$DEVICE" build/perf/Build/Products/Release-iphonesimulator/Cheetah.app
+          # A permission alert would take the tests' taps, which go to positions.
+          for app in com.example.cheetah com.example.cheetah.twin com.nightshade.nightshadeapp; do
+            xcrun simctl privacy "$DEVICE" grant location "$app"
+          done
+
+      - name: Compare
+        working-directory: cheetah
+        timeout-minutes: 80
+        env:
+          TEST_RUNNER_NATIVE_TWIN: "1"
+          TEST_RUNNER_REACT_TWIN: "1"
+        run: |
+          status=0
+          xcodebuild test-without-building -project ios/Cheetah.xcodeproj -scheme Cheetah \
+            -sdk iphonesimulator -configuration Release \
+            -destination "platform=iOS Simulator,id=$DEVICE" \
+            -derivedDataPath build/perf \
+            -only-testing:CheetahUITests/CheetahPerformanceTests \
+            -retry-tests-on-failure -test-iterations 2 \
+            -test-timeouts-enabled YES -maximum-test-execution-time-allowance 300 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO > /tmp/perf.log 2>&1 || status=$?
+          grep -E "Test Case.*(passed|failed|skipped)|swift:[0-9]+: error|CheetahPerf issue" /tmp/perf.log || true
+          {
+            echo "## Cheetah, UIKit and React Native"
+            python3 tools/profile/ios_compare.py /tmp/perf.log
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          exit $status
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs
+          path: |
+            /tmp/*.log
+            /tmp/cheetah-failed-*.png
+          if-no-files-found: ignore

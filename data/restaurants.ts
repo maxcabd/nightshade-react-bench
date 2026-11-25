@@ -1,0 +1,38 @@
+export const restaurants = [
+  {
+    id: 1,
+    image: "https://source.unsplash.com/800x600/?restaurant",
+    logo: "https://source.unsplash.com/100x100/?coffee",
+    name: "Java Haven",
+    isOpen: true,
+    tags: ["Coffee", "Café", "Pastries"],
+    amenities: ["Free Wi-Fi", "Outdoor Seating"],
+  },
+  {
+    id: 2,
+    image: "https://source.unsplash.com/800x600/?pizza",
+    logo: "https://source.unsplash.com/100x100/?pizza",
+    name: "Pizza Paradise",
+    isOpen: false,
+    tags: ["Italian", "Pizza", "Pasta"],
+    amenities: ["Delivery", "Late Night"],
+  },
+  {
+    id: 3,
+    image: "https://source.unsplash.com/800x600/?sushi",
+    logo: "https://source.unsplash.com/100x100/?sushi",
+    name: "Sushi Zen",
+    isOpen: true,
+    tags: ["Japanese", "Sushi", "Ramen"],
+    amenities: ["Reservations", "Bar"],
+  },
+  {
+    id: 4,
+    image: "https://source.unsplash.com/800x600/?burger",
+    logo: "https://source.unsplash.com/100x100/?burger",
+    name: "Burger Joint",
+    isOpen: true,
+    tags: ["Fast Food", "Burgers", "Fries"],
+    amenities: ["Drive-Thru", "Takeout"],
+  },
+];
