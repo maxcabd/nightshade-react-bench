@@ -4,6 +4,8 @@ import { Stack, SplashScreen } from "expo-router";
 
 import { useFonts } from "expo-font";
 import { useEffect } from "react";
+import { Dimensions } from "react-native";
+import { BENCH_RESULTS } from "@/bench";
 
 import { QueryProvider } from "./providers/QueryProvider";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -46,6 +48,8 @@ export default function RootLayout() {
               presentation: "formSheet",
               animation: "none",
               gestureEnabled: false,
+              sheetAllowedDetents: [(BENCH_RESULTS ? 120 : 320) / Dimensions.get("window").height],
+              sheetInitialDetentIndex: 0,
               sheetCornerRadius: 54,
               sheetLargestUndimmedDetentIndex: "last",
             }}

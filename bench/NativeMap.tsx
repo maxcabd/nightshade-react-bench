@@ -27,9 +27,13 @@ export default function NativeMap() {
     );
   };
 
+  useEffect(() => {
+    if (cards.length > 0) setTimeout(() => focus(cards[0]), 300);
+  }, [cards]);
+
   return (
     <View style={{ flex: 1 }}>
-      <MapView ref={map} style={StyleSheet.absoluteFill} initialRegion={BENCH_REGION} userInterfaceStyle="dark">
+      <MapView ref={map} style={StyleSheet.absoluteFill} initialRegion={BENCH_REGION} userInterfaceStyle="dark" mapType="mutedStandard" showsPointsOfInterest={false} showsBuildings={false} showsUserLocation>
         {cards.map((card) => (
           <Marker
             key={card.place_id}

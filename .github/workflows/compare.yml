@@ -5,6 +5,13 @@ name: Compare
 # and the photo.
 on:
   workflow_dispatch:
+    inputs:
+      runs:
+        description: Runs, each on a machine of its own (a JSON list)
+        default: "[1, 2, 3]"
+      only:
+        description: One test only, for example testReactPage
+        default: ""
 
 permissions:
   contents: read
@@ -14,9 +21,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  compare:
+  build:
     runs-on: macos-26
-    timeout-minutes: 150
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,7 +51,15 @@ jobs:
           xcrun simctl boot "$DEVICE" || true
           xcrun simctl bootstatus "$DEVICE" -b
 
+      - name: Use the last build if nothing changed
+        id: cached
+        uses: actions/cache@v4
+        with:
+          path: products/React.app
+          key: react-${{ hashFiles('react/app/**', 'react/bench/**', 'react/data/**', 'react/*.js*', 'react/*.cjs', 'react/*.css') }}
+
       - name: Build the React Native app (Release, Hermes, New Architecture)
+        if: steps.cached.outputs.cache-hit != 'true'
         working-directory: react
         env:
           EXPO_PUBLIC_BENCH: "1"
@@ -61,7 +76,7 @@ jobs:
             -destination "platform=iOS Simulator,id=$DEVICE" \
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO build \
             > /tmp/rn.log 2>&1 || { grep -E "error:" /tmp/rn.log | head -30; tail -30 /tmp/rn.log; exit 1; }
-          xcrun simctl install "$DEVICE" build/Build/Products/Release-iphonesimulator/*.app
+          mkdir -p ../products && cp -R build/Build/Products/Release-iphonesimulator/nightshadex.app ../products/React.app
 
       - name: Build Cheetah and the UIKit twin
         working-directory: cheetah
@@ -74,7 +89,7 @@ jobs:
             -destination "platform=iOS Simulator,id=$DEVICE" \
             -derivedDataPath build/twin CODE_SIGNING_ALLOWED=NO build > /tmp/twin.log 2>&1 \
             || { grep -E "error:" /tmp/twin.log | head; exit 1; }
-          xcrun simctl install "$DEVICE" build/twin/Build/Products/Release-iphonesimulator/NativeTwin.app
+          mkdir -p ../products && cp -R build/twin/Build/Products/Release-iphonesimulator/NativeTwin.app ../products/
           chmod +x ios/build-rust.sh
           CHEETAH_RUST_FEATURES="" ./ios/build-rust.sh > /tmp/rust.log 2>&1 || { tail -30 /tmp/rust.log; exit 1; }
           (cd ios && xcodegen generate)
@@ -83,40 +98,93 @@ jobs:
             -destination "platform=iOS Simulator,id=$DEVICE" \
             -derivedDataPath build/perf CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             > /tmp/cheetah.log 2>&1 || { grep -E "error:" /tmp/cheetah.log | head; exit 1; }
-          xcrun simctl install "$DEVICE" build/perf/Build/Products/Release-iphonesimulator/Cheetah.app
+          cp -R build/perf/Build/Products ../products/perf
+
+      - name: Pack
+        run: tar -czf products.tgz products
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: products
+          path: products.tgz
+          retention-days: 3
+
+  compare:
+    needs: build
+    runs-on: macos-26
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        run: ${{ fromJSON(inputs.runs) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: maxcabd/cheetah
+          path: cheetah
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: products
+
+      - name: Install the apps
+        run: |
+          tar -xzf products.tgz
+          DEVICE=$(xcrun simctl list devices available | awk '/-- iOS 26/ {f=1; next} /^-- / {f=0} f && /iPhone/ {print; exit}' | grep -oE '[0-9A-F-]{36}')
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
+          xcrun simctl boot "$DEVICE" || true
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl location "$DEVICE" set 37.7749,-122.4194
+          xcrun simctl install "$DEVICE" products/React.app
+          xcrun simctl install "$DEVICE" products/NativeTwin.app
+          xcrun simctl install "$DEVICE" products/perf/Release-iphonesimulator/Cheetah.app
           # A permission alert would take the tests' taps, which go to positions.
           for app in com.example.cheetah com.example.cheetah.twin com.nightshade.nightshadeapp; do
             xcrun simctl privacy "$DEVICE" grant location "$app"
           done
 
       - name: Compare
-        working-directory: cheetah
-        timeout-minutes: 80
+        timeout-minutes: 75
         env:
           TEST_RUNNER_NATIVE_TWIN: "1"
           TEST_RUNNER_REACT_TWIN: "1"
+          ONLY: ${{ inputs.only }}
         run: |
           status=0
-          xcodebuild test-without-building -project ios/Cheetah.xcodeproj -scheme Cheetah \
-            -sdk iphonesimulator -configuration Release \
+          xcodebuild test-without-building -xctestrun products/perf/*.xctestrun \
             -destination "platform=iOS Simulator,id=$DEVICE" \
-            -derivedDataPath build/perf \
-            -only-testing:CheetahUITests/CheetahPerformanceTests \
+            -only-testing:"CheetahUITests/CheetahPerformanceTests${ONLY:+/$ONLY}" \
             -retry-tests-on-failure -test-iterations 2 \
             -test-timeouts-enabled YES -maximum-test-execution-time-allowance 300 \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO > /tmp/perf.log 2>&1 || status=$?
-          grep -E "Test Case.*(passed|failed|skipped)|swift:[0-9]+: error|CheetahPerf issue" /tmp/perf.log || true
-          {
-            echo "## Cheetah, UIKit and React Native"
-            python3 tools/profile/ios_compare.py /tmp/perf.log
-          } | tee -a "$GITHUB_STEP_SUMMARY"
+            > /tmp/perf-${{ matrix.run }}.log 2>&1 || status=$?
+          grep -E "Test Case.*(passed|failed|skipped)|swift:[0-9]+: error|CheetahPerf issue" /tmp/perf-*.log || tail -20 /tmp/perf-*.log
+          python3 cheetah/tools/profile/ios_compare.py /tmp/perf-*.log | tee -a "$GITHUB_STEP_SUMMARY"
           exit $status
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: logs
+          name: run-${{ matrix.run }}
           path: |
-            /tmp/*.log
-            /tmp/cheetah-failed-*.png
+            /tmp/perf-*.log
+            /tmp/cheetah-*.png
           if-no-files-found: ignore
+
+  together:
+    needs: compare
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: maxcabd/cheetah
+          path: cheetah
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: run-*
+          path: runs
+      - run: |
+          {
+            echo "## Cheetah, UIKit and React Native: medians"
+            python3 cheetah/tools/profile/ios_compare.py runs/run-*/perf-*.log
+          } | tee -a "$GITHUB_STEP_SUMMARY"

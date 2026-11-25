@@ -164,6 +164,11 @@ const Map = () => {
   const fitMapToResults = (cards: Card[]) => {
     if (!mapRef.current || cards.length === 0) return;
 
+    if (BENCH) {
+      focusPlace(cards[0]);
+      return;
+    }
+
     const coordinates = cards.map(card => ({
       latitude: card.lat,
       longitude: card.lng,
@@ -185,13 +190,28 @@ const Map = () => {
     });
   };
 
+  // Where Cheetah and the UIKit twin move the map.
+  const focusPlace = (card: Card) => {
+    mapRef.current?.animateToRegion(
+      { latitude: card.lat, longitude: card.lng, latitudeDelta: 0.004, longitudeDelta: 0.004 },
+      500
+    );
+  };
+
+  useEffect(() => {
+    if (BENCH_RESULTS) setTimeout(() => focusPlace(BENCH_CARDS[0]), 300);
+  }, []);
+
   const handleRestaurantChange = (restaurant: any, index: number) => {
     console.log("Selected:", restaurant.name, "at index", index);
     setSelectedCardIndex(index);
 
     // Animate map to the selected restaurant
     const card = searchCards[index];
-    if (card && mapRef.current) {
+    if (BENCH && card) {
+      focusPlace(card);
+      Haptics.selectionAsync();
+    } else if (card && mapRef.current) {
       // We want the pin to appear in the visible area above the carousel
       // Carousel + search bar covers ~340px from bottom (EXPANDED_HEIGHT 320 + gaps)
       // On a typical phone (844px tall), that's 40% of screen
@@ -298,6 +318,10 @@ const Map = () => {
           style={styles.map}
           region={region}
           customMapStyle={darkMapStyle}
+          userInterfaceStyle="dark"
+          mapType="mutedStandard"
+          showsPointsOfInterest={false}
+          showsBuildings={false}
           showsUserLocation={true}
         >
           {/* Static restaurant markers (when no search results) */}
