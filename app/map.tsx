@@ -27,6 +27,7 @@ import CustomMarker from "@/app/components/Map/CustomMarker";
 import SearchBottomSheet from "@/app/components/Map/SearchSheet";
 import RestaurantCardCarousel from "@/app/components/Map/PlaceCardCarousel";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
+import { GlassIconButton } from "@/app/components/GlassButton";
 import { useSearchRestaurantsMutation } from "@/app/lib/places/hooks";
 import type { Card } from "@/app/lib/places/hooks";
 import type { ICarouselInstance } from "react-native-reanimated-carousel";
@@ -377,6 +378,20 @@ const Map = () => {
           ))}
         </MapView>
       )}
+
+      {/* Menu: Cheetah's opens a side drawer, which isn't measured. The same
+          48pt glass button where Cheetah and the UIKit twin put it. */}
+      <View
+        style={{
+          position: "absolute",
+          top: 95,
+          left: 16,
+          zIndex: Z.CAROUSEL,
+          elevation: Z.CAROUSEL,
+        }}
+      >
+        <GlassIconButton icon="bars" size={20} diameter={48} label="Menu" />
+      </View>
 
       {/* Restaurant Card Carousel - floating above map */}
       {hasResults && searchCards.length > 0 && (

@@ -11,23 +11,29 @@ type Props = {
     icon: ComponentProps<typeof FontAwesome6>["name"];
     onPress?: () => void;
     size?: number;          // optional icon size override
+    diameter?: number;      // optional button size override
+    label?: string;
 };
 
 export function GlassIconButton({
     icon,
     onPress,
     size = 16,
+    diameter = SIZE,
+    label,
 }: Props) {
     return (
         <Pressable
             onPress={onPress}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={label}
             style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
         >
             <View
                 style={{
-                    width: SIZE,
-                    height: SIZE,
+                    width: diameter,
+                    height: diameter,
                     borderRadius: R,
                     borderWidth: BORDER,
                     borderColor: "rgba(0,0,0,0.25)",
@@ -37,8 +43,8 @@ export function GlassIconButton({
             >
                 <View
                     style={{
-                        width: SIZE - BORDER * 2,
-                        height: SIZE - BORDER * 2,
+                        width: diameter - BORDER * 2,
+                        height: diameter - BORDER * 2,
                         borderRadius: R,
                         overflow: "hidden",
                     }}
