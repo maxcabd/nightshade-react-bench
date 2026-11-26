@@ -179,7 +179,10 @@ jobs:
           for n in 1 2 3 4 5; do
             for pair in "Cheetah com.example.cheetah --nightshade-demo" "UIKit com.example.cheetah.twin" "React com.nightshade.nightshadeapp"; do
               set -- $pair
-              xcrun simctl terminate "$DEVICE" "$2" 2>/dev/null || true
+              # From the home screen every time, as a person would.
+              for app in com.example.cheetah com.example.cheetah.twin com.nightshade.nightshadeapp; do
+                xcrun simctl terminate "$DEVICE" "$app" 2>/dev/null || true
+              done
               sleep 3
               xcrun simctl io "$DEVICE" recordVideo --codec h264 --force "/tmp/launch-$1-$n.mp4" > /dev/null 2>&1 &
               recorder=$!
@@ -203,7 +206,7 @@ jobs:
           path: |
             /tmp/perf-*.log
             /tmp/launch-*.txt
-            /tmp/launch-*-1.mp4
+            /tmp/launch-*.mp4
             /tmp/cheetah-*.png
           if-no-files-found: ignore
 
