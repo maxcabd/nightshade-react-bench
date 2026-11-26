@@ -174,6 +174,24 @@ jobs:
               done
             done
           fi
+          # Launches filmed, with nothing of XCTest's running.
+          which ffmpeg > /dev/null || brew install ffmpeg > /dev/null
+          for n in 1 2 3 4 5; do
+            for pair in "Cheetah com.example.cheetah --nightshade-demo" "UIKit com.example.cheetah.twin" "React com.nightshade.nightshadeapp"; do
+              set -- $pair
+              xcrun simctl terminate "$DEVICE" "$2" 2>/dev/null || true
+              sleep 3
+              xcrun simctl io "$DEVICE" recordVideo --codec h264 --force "/tmp/launch-$1-$n.mp4" > /dev/null 2>&1 &
+              recorder=$!
+              sleep 2
+              xcrun simctl launch "$DEVICE" "$2" $3 > /dev/null
+              sleep 9
+              kill -INT $recorder; wait $recorder || true
+            done
+          done
+          for app in Cheetah UIKit React; do
+            echo "$app"; python3 cheetah/tools/profile/launch_video.py /tmp/launch-$app-*.mp4
+          done | tee /tmp/launch-${{ matrix.run }}.txt | tee -a "$GITHUB_STEP_SUMMARY"
           grep -E "Test Case.*(passed|failed|skipped)|swift:[0-9]+: error|CheetahPerf issue" /tmp/perf-*.log || tail -20 /tmp/perf-*.log
           python3 cheetah/tools/profile/ios_compare.py /tmp/perf-*.log | tee -a "$GITHUB_STEP_SUMMARY"
           exit $status
@@ -184,6 +202,8 @@ jobs:
           name: run-${{ matrix.run }}
           path: |
             /tmp/perf-*.log
+            /tmp/launch-*.txt
+            /tmp/launch-*-1.mp4
             /tmp/cheetah-*.png
           if-no-files-found: ignore
 
